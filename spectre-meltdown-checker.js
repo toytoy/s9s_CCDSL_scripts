@@ -6,6 +6,21 @@ var TITLE="Meltdown/Spectre Check";
 var ADVICE_WARNING="Please upgrade your kernel";
 var ADVICE_OK="Kernel is not affected by Meltdown/Spectre." ;
 
+/**
+ * 
+ * @return Returns the alarm which we can use to set the alarm to raise
+ */
+function myAlarm(title, message, recommendation)
+{
+  return Alarm::alarmId(
+        Node, 
+	  	true,
+        title, //"Computer is on fire",
+        message, // "The computer is on fire, it is on flames.",
+        recommendation //"Pour some water on it."
+  );
+}
+
 function main()
 {
     var hosts     = cluster::mySqlNodes();
@@ -111,34 +126,33 @@ function main()
 		                                  retval["errorMessage"]);
 		            }
 		        } else {
-					msg = "";
 		            shell = "cat " + todayLogFile + " | tr -d '\n'";
 			        retval = host.system(shell);
 			        reply = retval["result"];
 					jsonStr = '{"list":' + reply.toString() + '}';
 			        jsonSpectreMeltdownResult = JSON::parse(jsonStr);
 					
-					/*
-					print(shell);
-					print("retvalOn cat " + retval);
-					print("jsonStr " + jsonStr);
-					print("jsonSpectreMeltdownResult " + jsonSpectreMeltdownResult);
-					*/
-					
 					for (ndex=0; ndex < jsonSpectreMeltdownResult["list"].size(); ndex++) {
-			            if (jsonSpectreMeltdownResult["list"][ndex]["VULNERABLE"]) {
-			                msg  = msg + "Host is affected by " 
+					    if (jsonSpectreMeltdownResult["list"][ndex]["VULNERABLE"]) {
+			                msg  += "<br />Host is affected by " 
 								 + jsonSpectreMeltdownResult["list"][ndex]["CVE"] + "/"
-								 + jsonSpectreMeltdownResult["list"][ndex]["NAME"] + "."
-								 + "Suggested action: &quot;" + sonSpectreMeltdownResult["list"][ndex]["INFOS"];
+								 + jsonSpectreMeltdownResult["list"][ndex]["NAME"] + ". "
+								 + "Suggested action: &quot;" + jsonSpectreMeltdownResult["list"][ndex]["INFOS"] + "&quot;";
+							
 			            } 
 					}
 					
 		            if (msg.length()) {
+						var recommendation = "We advise to update your kernel to the latest version "
+									 		 "or check your Linux Distro and see the recent updates about this CVE.";
 		                advice.setSeverity(Warning);
 		                advice.setJustification(msg);
-		                advice.setAdvice("We advise to update your kernel to the latest version "
-		                 "or check your Linux Distro and see the recent updates about this CVE.");
+		                advice.setAdvice(recommendation);
+        
+			             var myAlarmId = myAlarm("Metldown/Spectre Affected!", msg, "");
+			             var sentMessage;
+						 // Let's raise an alarm.
+                         sentMessage = host.raiseAlarm(myAlarmId, Warning);
 		            } else {
 		                advice.setSeverity(Ok);
 		                advice.setJustification(
@@ -147,7 +161,6 @@ function main()
 						);
 		                advice.setAdvice(ADVICE_OK);
 		            }
-		            print(host.hostName() + ": " + msg);
 		        }				
             	
             } // end
@@ -157,6 +170,7 @@ function main()
         advice.setTitle(TITLE);
         advisorMap[idx]= advice;
         print(advice.toString("%E"));
+        
     }
     return advisorMap;
 }
